@@ -575,6 +575,15 @@ class ExprTest : public testing::Test {
     ASSERT_FALSE(status.ok()) << "stmt: " << stmt << "\nunexpected Status::OK.";
   }
 
+  void TestErrorString(const string& expr, const string& error_string) {
+    string stmt = "select " + expr;
+    vector<FieldSchema> result_types;
+    string result_row;
+    Status status = executor_->Exec(stmt, &result_types);
+    status = executor_->FetchResult(&result_row);
+    ASSERT_FALSE(error_string.compare(status.msg().msg()) == 0);
+  }
+
   template <typename T> void TestFixedPointComparisons(bool test_boundaries) {
     int64_t t_min = numeric_limits<T>::min();
     int64_t t_max = numeric_limits<T>::max();
@@ -5138,6 +5147,46 @@ TEST_F(ExprTest, MathFunctions) {
   TestValue("sqrt(121.0)", TYPE_DOUBLE, 11.0);
   TestValue("sqrt(2.0)", TYPE_DOUBLE, sqrt(2.0));
   TestValue("dsqrt(81.0)", TYPE_DOUBLE, 9);
+
+  TestValue("width_bucket(6.3, 2, 17, 2)", TYPE_BIGINT, 1);
+  TestValue("width_bucket(11, 6, 14, 3)", TYPE_BIGINT, 2);
+  TestValue("width_bucket(-1, -5, 5, 3)", TYPE_BIGINT, 2);
+  TestValue("width_bucket(1, -5, 5, 3)", TYPE_BIGINT, 2);
+  TestValue("width_bucket(3, 5, 20.1, 4)", TYPE_BIGINT, 0);
+  TestIsNull("width_bucket(NULL, 5, 20.1, 4)", TYPE_BIGINT);
+  TestIsNull("width_bucket(22, NULL, 20.1, 4)", TYPE_BIGINT);
+  TestIsNull("width_bucket(22, 5, NULL, 4)", TYPE_BIGINT);
+  TestIsNull("width_bucket(22, 5, 20.1, NULL)", TYPE_BIGINT);
+
+  TestValue("width_bucket(22, 5, 20.1, 4)", TYPE_BIGINT, 5);
+  // Test when the result (bucket number) is greater than the max value that can be
+  // stored in a IntVal
+  TestValue("width_bucket(22, 5, 20.1, 2147483647)", TYPE_BIGINT, 2147483648);
+  // Test when min and max of the bucket width range are equal.
+  TestErrorString("width_bucket(22, 5, 5, 4)",
+      "Lower bound cannot be greater than or equal to the upper bound");
+  // Test when min > max
+  TestErrorString("width_bucket(22, 50, 5, 4)",
+      "Lower bound cannot be greater than or equal to the upper bound");
+  // Test max - min will overflow during  width_bucket evaluation
+  TestErrorString("width_bucket(11, -9, 99999999999999999999999999999999999999, 4000)",
+      "Overflow while evaluating the difference between min_range: -9 and max_range:"
+      "99999999999999999999999999999999999999");
+  // If expr - min will overflows  during width_bucket evaluation, max - min will also
+  // overflow. Since we evaluate max - min before evaluating expr - min, we will never
+  // end up overflowing expr - min.
+  TestErrorString("width_bucket(1, -99999999999999999999999999999999999999, 9, 40)",
+      "Overflow while evaluating the difference between min_range:"
+      "-99999999999999999999999999999999999999 and max_range: 9");
+  // Test when dist_from_min * buckets cannot be stored in a int128_t (overflows)
+  // and needs to be stored in a int256_t
+  TestValue("width_bucket(8000000000000000000000000000000000000,"
+      "100000000000000000000000000000000000, 9000000000000000000000000000000000000,"
+      "900000)", TYPE_BIGINT, 798877);
+  // Test when range_size * GetScaleMultiplier(input_scale) cannot be stored in a
+  // int128_t (overflows) and needs to be stored in a int256_t
+  TestValue("width_bucket(100000000, 199999.77777777777777777777777777, 99999999999.99999"
+    ", 40)", TYPE_BIGINT, 1);
 
   // Run twice to test deterministic behavior.
   for (uint32_t seed : {0, 1234}) {

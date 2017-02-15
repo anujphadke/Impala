@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-
 #ifndef IMPALA_EXPRS_MATH_FUNCTIONS_H
 #define IMPALA_EXPRS_MATH_FUNCTIONS_H
 
@@ -111,6 +110,14 @@ class MathFunctions {
       FunctionContext*, int num_args, const TimestampVal* args);
   template <bool ISLEAST> static DecimalVal LeastGreatest(
       FunctionContext*, int num_args, const DecimalVal* args);
+
+  template <typename T1>
+  static BigIntVal WidthBucketImpl(FunctionContext* ctx,const T1& expr,
+      const T1& min_range,const T1& max_range, const IntVal& num_buckets);
+
+  static BigIntVal WidthBucket(FunctionContext* ctx, const DecimalVal& expr,
+      const DecimalVal& min_range, const DecimalVal& max_range,
+      const IntVal& num_buckets);
 
  private:
   static const int32_t MIN_BASE = 2;
