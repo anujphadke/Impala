@@ -427,6 +427,7 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
     for (int i = 0; i < children_.size(); ++i) {
       // For varargs, we must compare with the last type in fnArgs.argTypes.
       int ix = Math.min(fnArgs.length - 1, i);
+
       if (!fnArgs[ix].isWildcardDecimal()) continue;
 
       Type childType = children_.get(i).type_;
@@ -446,6 +447,7 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
         throw new AnalysisException(
             "Cannot resolve DECIMAL precision and scale from NULL type.");
       }
+      result = ((ScalarType)result).getMinResolutionDecimal();
       Preconditions.checkState(result.isDecimal() && !result.isWildcardDecimal());
     }
     return result;
