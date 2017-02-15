@@ -475,6 +475,7 @@ abstract public class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
         throw new AnalysisException(
             "Cannot resolve DECIMAL precision and scale from NULL type.");
       }
+      result = ((ScalarType)result).getMinResolutionDecimal();
       Preconditions.checkState(result.isDecimal() && !result.isWildcardDecimal());
     }
     return result;

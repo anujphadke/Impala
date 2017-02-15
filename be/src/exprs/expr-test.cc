@@ -5139,6 +5139,38 @@ TEST_F(ExprTest, MathFunctions) {
   TestValue("sqrt(2.0)", TYPE_DOUBLE, sqrt(2.0));
   TestValue("dsqrt(81.0)", TYPE_DOUBLE, 9);
 
+  TestValue("width_bucket(6.3, 2, 17, 2)", TYPE_BIGINT, 1);
+  TestValue("width_bucket(11, 6, 14, 3)", TYPE_BIGINT, 2);
+  TestValue("width_bucket(-1, -5, 5, 3)", TYPE_BIGINT, 2);
+  TestValue("width_bucket(1, -5, 5, 3)", TYPE_BIGINT, 2);
+  TestValue("width_bucket(3, 5, 20.1, 4)", TYPE_BIGINT, 0);
+  TestIsNull("width_bucket(NULL, 5, 20.1, 4)", TYPE_BIGINT);
+  TestIsNull("width_bucket(22, NULL, 20.1, 4)", TYPE_BIGINT);
+  TestIsNull("width_bucket(22, 5, NULL, 4)", TYPE_BIGINT);
+  TestIsNull("width_bucket(22, 5, 20.1, NULL)", TYPE_BIGINT);
+
+  TestValue("width_bucket(22, 5, 20.1, 4)", TYPE_BIGINT, 5);
+  // Test when the result (bucket number) is greater than the max value that can be
+  // stored in a IntVal
+  TestValue("width_bucket(22, 5, 20.1, 2147483647)", TYPE_BIGINT, 2147483648);
+  // Test when min and max of the bucket width range are equal.
+  TestError("width_bucket(22, 5, 5, 4)");
+  // Test when min > max
+  TestError("width_bucket(22, 50, 5, 4)");
+  // Test max - min will overflow during  width_bucket evaluation
+  TestError("width_bucket(11, -9, 99999999999999999999999999999999999999, 4000)");
+  // expr - min will overflow  during width_bucket evaluation
+  TestError("width_bucket(1, -99999999999999999999999999999999999999, 9, 40)");
+  // Test when dist_from_min * buckets cannot be stored in a int128_t (overflows)
+  // and needs to be stored in a int256_t
+  TestValue("width_bucket(8000000000000000000000000000000000000,"
+      "100000000000000000000000000000000000, 9000000000000000000000000000000000000,"
+      "900000)", TYPE_BIGINT, 798877);
+  // Test when range_size * GetScaleMultiplier(input_scale) cannot be stored in a
+  // int128_t (overflows) and needs to be stored in a int256_t
+  TestValue("width_bucket(100000000, 199999.77777777777777777777777777, 99999999999.99999"
+    ", 40)", TYPE_BIGINT, 1);
+
   // Run twice to test deterministic behavior.
   for (uint32_t seed : {0, 1234}) {
     stringstream rand, random;
