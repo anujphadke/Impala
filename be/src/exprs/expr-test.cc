@@ -4092,6 +4092,18 @@ TEST_F(ExprTest, MathFunctions) {
   TestValue("sqrt(2.0)", TYPE_DOUBLE, sqrt(2.0));
   TestValue("dsqrt(81.0)", TYPE_DOUBLE, 9);
 
+  TestValue("width_bucket(6.3, 2, 17, 2)", TYPE_INT, 1);
+  TestValue("width_bucket(11, 6, 14, 3)", TYPE_INT, 2);
+  TestValue("width_bucket(-1, -5, 5, 3)", TYPE_INT, 2);
+  TestValue("width_bucket(1, -5, 5, 3)", TYPE_INT, 2);
+  TestValue("width_bucket(3, 5, 20.1, 4)", TYPE_INT, 0);
+  TestValue("width_bucket(22, 5, 20.1, 4)", TYPE_INT, 5);
+  // Test when min and max of the bucket width range are equal.
+  TestError("width_bucket(22, 5, 5, 4)");
+  // Test max - min will overflow during  width_bucket evaluation
+  TestError("width_bucket(11, -9, 99999999999999999999999999999999999999, 4000)");
+  // expr - min will overflow  during width_bucket evaluation
+  TestError("width_bucket(1, -99999999999999999999999999999999999999, 9, 40)");
   // Run twice to test deterministic behavior.
   uint32_t seed = 0;
   double expected = static_cast<double>(rand_r(&seed)) / static_cast<double>(RAND_MAX);
