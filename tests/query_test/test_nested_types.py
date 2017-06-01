@@ -66,6 +66,10 @@ class TestNestedTypes(ImpalaTestSuite):
     """Test subplans with various exec nodes inside it."""
     self.run_test_case('QueryTest/nested-types-subplan', vector)
 
+  def test_subplan1(self, vector):
+    """Test subplans with various exec nodes inside it."""
+    self.run_test_case('QueryTest/subplans', vector)
+
   def test_with_clause(self, vector):
     """Queries using nested types and with WITH clause."""
     self.run_test_case('QueryTest/nested-types-with-clause', vector)
