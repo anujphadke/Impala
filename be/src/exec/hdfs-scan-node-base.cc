@@ -24,6 +24,7 @@
 #include "exec/hdfs-avro-scanner.h"
 #include "exec/hdfs-parquet-scanner.h"
 
+#include <tuple>
 #include <sstream>
 #include <avro/errors.h>
 #include <avro/schema.h>
@@ -555,7 +556,7 @@ bool HdfsScanNodeBase::FilePassesFilterPredicates(
           filter_ctxs)) {
     for (int j = 0; j < file->splits.size(); ++j) {
       // Mark range as complete to ensure progress.
-      RangeComplete(format, file->file_compression);
+      RangeComplete(format, file->file_compression, true);
     }
     return false;
   }
@@ -772,18 +773,18 @@ bool HdfsScanNodeBase::PartitionPassesFilters(int32_t partition_id,
 }
 
 void HdfsScanNodeBase::RangeComplete(const THdfsFileFormat::type& file_type,
-    const THdfsCompression::type& compression_type) {
+    const THdfsCompression::type& compression_type, bool skipped) {
   vector<THdfsCompression::type> types;
   types.push_back(compression_type);
-  RangeComplete(file_type, types);
+  RangeComplete(file_type, types, skipped);
 }
 
 void HdfsScanNodeBase::RangeComplete(const THdfsFileFormat::type& file_type,
-    const vector<THdfsCompression::type>& compression_types) {
+    const vector<THdfsCompression::type>& compression_types, bool skipped) {
   scan_ranges_complete_counter()->Add(1);
   progress_.Update(1);
   for (int i = 0; i < compression_types.size(); ++i) {
-    ++file_type_counts_[make_pair(file_type, compression_types[i])];
+    ++file_type_counts_[std::make_tuple(file_type, skipped, compression_types[i])];
   }
 }
 
@@ -873,7 +874,21 @@ void HdfsScanNodeBase::StopAndFinalizeCounters() {
     {
       for (FileTypeCountsMap::const_iterator it = file_type_counts_.begin();
           it != file_type_counts_.end(); ++it) {
-        ss << it->first.first << "/" << it->first.second << ":" << it->second << " ";
+
+        THdfsFileFormat::type file_format = std::get<0>(it->first);
+        bool skipped = std::get<1>(it->first);
+        THdfsCompression::type compression_type = std::get<2>(it->first);
+
+        if (skipped) {
+          if (file_format == THdfsFileFormat::PARQUET) {
+            ss << file_format << "(Skipped)" << "/" << "Unknown:" << it->second << " ";
+          } else {
+            ss << file_format << "(Skipped)" << "/" << compression_type << ":"
+              << it->second << " ";
+          }
+        } else {
+          ss << file_format << "/" << compression_type << ":" << it->second << " ";
+        }
       }
     }
     runtime_profile_->AddInfoString("File Formats", ss.str());
