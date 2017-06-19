@@ -6,3 +6,10 @@ select * from alltypesagg
 ---- RUNTIME_PROFILE
 row_regex: .*RowsRead: 11.00K .
 ====
+---- QUERY
+# This query will do a full table scan to count the num of rows
+# read during a scan
+select count(*) from tpcds_parquet.store_sales
+---- RUNTIME_PROFILE
+row_regex: .*File Formats: PARQUET\(Skipped\)/Unknown:1824
+====
