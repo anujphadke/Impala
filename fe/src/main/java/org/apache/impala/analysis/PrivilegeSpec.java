@@ -129,10 +129,10 @@ public class PrivilegeSpec implements ParseNode {
     privilege.setServer_name(serverName_);
     // We don't currently filter on privilege level, so set it to an arbitrary value.
     privilege.setPrivilege_level(privilegeLevel_);
-    if (dbName_ != null) privilege.setDb_name(dbName_);
-    if (tableName_ != null) privilege.setTable_name(tableName_.getTbl());
+    if (dbName_ != null) privilege.setDb_name(dbName_.toLowerCase());
+    if (tableName_ != null) privilege.setTable_name(tableName_.getTbl().toLowerCase());
     if (uri_ != null) privilege.setUri(uri_.toString());
-    if (columnName != null) privilege.setColumn_name(columnName);
+    if (columnName != null) privilege.setColumn_name(columnName.toLowerCase());
     privilege.setCreate_time_ms(-1);
     privilege.setPrivilege_name(RolePrivilege.buildRolePrivilegeName(privilege));
     return privilege;
