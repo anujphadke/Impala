@@ -37,6 +37,7 @@ import org.apache.impala.catalog.Role;
 import org.apache.impala.catalog.RolePrivilege;
 import org.apache.impala.common.ImpalaException;
 import org.apache.impala.common.ImpalaRuntimeException;
+import org.apache.impala.service.BackendConfig;
 import org.apache.impala.thrift.TPrivilege;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -85,9 +86,12 @@ public class SentryProxy {
       processUser_ = new User(kerberosPrincipal);
     }
     sentryPolicyService_ = new SentryPolicyService(sentryConfig);
-    // Sentry Service is enabled.
-    // TODO: Make this configurable
-    policyReader_.scheduleAtFixedRate(new PolicyReader(), 0, 60,
+
+    LOG.info("polling @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@1111" + BackendConfig.INSTANCE.getKuduClientTimeoutMs());
+    LOG.info("polling @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@2222" + BackendConfig.INSTANCE.getSentryCatalogPollingFrequency());
+    policyReader_.scheduleAtFixedRate(new PolicyReader(), 0,
+        //BackendConfig.INSTANCE.getSentryCatalogPollingFrequency(),
+        60,
         TimeUnit.SECONDS);
   }
 
