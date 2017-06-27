@@ -21,8 +21,9 @@ import java.io.File;
 import java.net.MalformedURLException;
 
 import org.apache.hadoop.conf.Configuration;
-
+import org.apache.impala.service.BackendConfig;
 import org.apache.impala.common.FileSystemUtil;
+
 import com.google.common.base.Strings;
 
 /**
