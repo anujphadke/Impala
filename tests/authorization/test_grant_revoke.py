@@ -22,6 +22,7 @@ import pytest
 from getpass import getuser
 from os import getenv
 from time import sleep
+from  __builtin__ import any
 
 from tests.common.custom_cluster_test_suite import CustomClusterTestSuite
 from tests.common.impala_test_suite import ImpalaTestSuite
@@ -118,5 +119,45 @@ class TestGrantRevoke(CustomClusterTestSuite, ImpalaTestSuite):
     # restarted.
     result = self.client.execute("show tables in functional");
     assert 'alltypes' in result.data
-    privileges_after = self.client.execute("show grant role test_role")
-    assert privileges_before.data == privileges_after.data
+
+  @pytest.mark.execute_serially
+  @CustomClusterTestSuite.with_args(
+      impalad_args="--server_name=server1",
+      catalogd_args="--sentry_config=" + SENTRY_CONFIG_FILE,
+      statestored_args=("--statestore_heartbeat_frequency_ms=300 "
+                        "--statestore_update_frequency_ms=300"))
+  def test_role_privilege_case(self, vector, unique_database):
+    """IMPALA-5582: Store sentry privileges in lower case. This
+    test grants select privileges to tables specified in lower,
+    upper and mix cases. This test verifies that these privileges
+    do not vanish on a sentryProxy thread update.
+    """
+    self.client.execute("create role test_role")
+    self.client.execute("grant all on server to test_role")
+    self.client.execute("grant role test_role to group {0}".format(
+        grp.getgrnam(getuser()).gr_name))
+
+    self.client.execute("grant all on database {0} to test_role".format(
+        unique_database))
+    #self.client.execute("use {0}".format(unique_database))
+    self.client.execute("create table if not exists test1(i int)")
+    self.client.execute("create table if not exists TEST2(i int)")
+    self.client.execute("create table if not exists Test3(i int)")
+
+    self.client.execute("grant select on table test1 to test_role")
+    self.client.execute("grant select on table test2 to test_role")
+    self.client.execute("grant select on table TesT3 to test_role")
+
+    result = self.client.execute("show grant role test_role")
+    #assert any('test1' in x for x in result.data)
+    #assert any('test2' in x for x in result.data)
+    #assert any('test3' in x for x in result.data)
+    # Sleep for a minute and make sure that the privileges
+    # on all 3 tables still persist on a sentryProxy thread
+    # update
+    sleep(60)
+    result = self.client.execute("show grant role test_role")
+    assert any('test1' in x for x in result.data)
+    assert any('test2' in x for x in result.data)
+    assert any('test3' in x for x in result.data)
+    self.client.execute("drop role test_role")

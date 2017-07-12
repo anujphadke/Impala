@@ -22,7 +22,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -33,7 +35,7 @@ import com.google.common.collect.Lists;
  */
 public class CatalogObjectCache<T extends CatalogObject> implements Iterable<T> {
   private final boolean caseInsensitiveKeys_;
-
+  private final static Logger LOG = LoggerFactory.getLogger(CatalogObjectCache.class);
   /**
    * Creates a new instance of the CatalogObjectCache that compares keys as
    * insensitive.
@@ -69,7 +71,9 @@ public class CatalogObjectCache<T extends CatalogObject> implements Iterable<T> 
   public synchronized boolean add(T catalogObject) {
     Preconditions.checkNotNull(catalogObject);
     String key = catalogObject.getName();
+    LOG.info("In add before converting" + key);
     if (caseInsensitiveKeys_) key = key.toLowerCase();
+    LOG.info("In add after converting" + key);
     T existingItem = metadataCache_.putIfAbsent(key, catalogObject);
     if (existingItem == null) return true;
 
@@ -89,6 +93,7 @@ public class CatalogObjectCache<T extends CatalogObject> implements Iterable<T> 
    */
   public synchronized T remove(String name) {
     if (caseInsensitiveKeys_) name = name.toLowerCase();
+    LOG.info("In remove before converting" + name);
     return metadataCache_.remove(name);
   }
 
