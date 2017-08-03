@@ -66,51 +66,51 @@ void TextConverter::UnescapeString(const char* src, char* dest, int* len,
 }
 
 // Codegen for a function to parse one slot.  The IR for a int slot looks like:
-// define i1 @WriteSlot({ i8, i32 }* %tuple_arg, i8* %data, i32 %len) {
+// define i1 @WriteSlot(<{ i32, i8 }>* %tuple_arg, i8* %data, i32 %len) #38 {
 // entry:
 //   %parse_result = alloca i32
-//   %0 = call i1 @IsNullString(i8* %data, i32 %len)
+//   %0 = call i1 @IrIsNullString(i8* %data, i32 %len)
 //   br i1 %0, label %set_null, label %check_zero
-//
+
 // set_null:                                         ; preds = %check_zero, %entry
-//   call void @SetNull({ i8, i32 }* %tuple_arg)
+//   %1 = bitcast <{ i32, i8 }>* %tuple_arg to i8*
+//   %null_byte_ptr2 = getelementptr inbounds i8, i8* %1, i32 4
+//   %null_byte3 = load i8, i8* %null_byte_ptr2
+//   %null_bit_set4 = or i8 %null_byte3, 1
+//   store i8 %null_bit_set4, i8* %null_byte_ptr2
 //   ret i1 true
-//
+
 // parse_slot:                                       ; preds = %check_zero
-//   %slot = getelementptr inbounds { i8, i32 }* %tuple_arg, i32 0, i32 1
-//   %1 = call i32 @IrStringToInt32(i8* %data, i32 %len, i32* %parse_result)
-//   %parse_result1 = load i32* %parse_result
-//   %failed = icmp eq i32 %parse_result1, 1
-//   br i1 %failed, label %parse_fail, label %parse_success
-//
-// check_zero:                                       ; preds = %entry
-//   %2 = icmp eq i32 %len, 0
-//   br i1 %2, label %set_null, label %parse_slot
-//
-// parse_success:                                    ; preds = %parse_slot
-//   store i32 %1, i32* %slot
-//   ret i1 true
-//
-// parse_fail:                                       ; preds = %parse_slot
-//   call void @SetNull({ i8, i32 }* %tuple_arg)
-//   ret i1 false
-// }
-//
-// If strict_mode = true, then 'parse_slot' also treats overflows errors, e.g.:
-// parse_slot:                                       ; preds = %check_zero
-//   %slot = getelementptr inbounds { i8, i32 }* %tuple_arg, i32 0, i32 1
-//   %1 = call i32 @IrStringToInt32(i8* %data, i32 %len, i32* %parse_result)
+//   %slot = getelementptr inbounds <{ i32, i8 }>, <{ i32, i8 }>* %tuple_arg, i32 0, i32 0
+//   %2 = call i32 @IrStringToInt32(i8* %data, i32 %len, i32* %parse_result)
 //   %parse_result1 = load i32, i32* %parse_result
 //   %failed = icmp eq i32 %parse_result1, 1
-//   %overflowed = icmp eq i32 %parse_result1, 2
-//   %failed_or = or i1 %failed, %overflowed
-//   br i1 %failed_or, label %parse_fail, label %parse_success
-Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
-    TupleDescriptor* tuple_desc, SlotDescriptor* slot_desc,
+//   br i1 %failed, label %parse_fail, label %parse_success
+
+// check_zero:                                       ; preds = %entry
+//   %3 = icmp eq i32 %len, 0
+//   br i1 %3, label %set_null, label %parse_slot
+
+// parse_success:                                    ; preds = %parse_slot
+//   store i32 %2, i32* %slot
+//   ret i1 true
+
+// parse_fail:                                       ; preds = %parse_slot
+//   %4 = bitcast <{ i32, i8 }>* %tuple_arg to i8*
+//   %null_byte_ptr = getelementptr inbounds i8, i8* %4, i32 4
+//   %null_byte = load i8, i8* %null_byte_ptr
+//   %null_bit_set = or i8 %null_byte, 1
+//   store i8 %null_bit_set, i8* %null_byte_ptr
+//   ret i1 false
+//}
+
+
+Status TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
+    TupleDescriptor* tuple_desc, SlotDescriptor* slot_desc, Function** fn,
     const char* null_col_val, int len, bool check_null, bool strict_mode) {
+
   if (slot_desc->type().type == TYPE_CHAR) {
-    LOG(INFO) << "Char isn't supported for CodegenWriteSlot";
-    return NULL;
+    return Status("Char isn't supported for CodegenWriteSlot");
   }
   SCOPED_TIMER(codegen->codegen_timer());
 
@@ -122,10 +122,16 @@ Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
   } else {
     is_null_string_fn = codegen->GetFunction(IRFunction::GENERIC_IS_NULL_STRING, false);
   }
-  if (is_null_string_fn == NULL) return NULL;
+  if (is_null_string_fn == NULL) {
+    return Status("TextConverter::CodegenWriteSlot: Failed to find IRFunction for "
+       "a null string");
+  }
 
   StructType* tuple_type = tuple_desc->GetLlvmStruct(codegen);
-  if (tuple_type == NULL) return NULL;
+  if (tuple_type == NULL) {
+    return Status("TextConverter::CodegenWriteSlot: Failed to generate "
+        "intermediate tuple type");
+  }
   PointerType* tuple_ptr_type = tuple_type->getPointerTo();
 
   LlvmCodeGen::FnPrototype prototype(
@@ -136,14 +142,14 @@ Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
 
   LlvmBuilder builder(codegen->context());
   Value* args[3];
-  Function* fn = prototype.GeneratePrototype(&builder, &args[0]);
+  *fn = prototype.GeneratePrototype(&builder, &args[0]);
 
   BasicBlock* set_null_block, *parse_slot_block, *check_zero_block = NULL;
-  codegen->CreateIfElseBlocks(fn, "set_null", "parse_slot",
+  codegen->CreateIfElseBlocks(*fn, "set_null", "parse_slot",
       &set_null_block, &parse_slot_block);
 
   if (!slot_desc->type().IsVarLenStringType()) {
-    check_zero_block = BasicBlock::Create(codegen->context(), "check_zero", fn);
+    check_zero_block = BasicBlock::Create(codegen->context(), "check_zero", *fn);
   }
 
   // Check if the data matches the configured NULL string.
@@ -222,17 +228,18 @@ Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
         break;
       default:
         DCHECK(false);
-        return NULL;
+        return Status("TextConverter::CodegenWriteSlot: Failed to codegen since "
+           "it could not determine the slot_desc type");
     }
     parse_fn = codegen->GetFunction(parse_fn_enum, false);
     DCHECK(parse_fn != NULL);
 
     // Set up trying to parse the string to the slot type
     BasicBlock* parse_success_block, *parse_failed_block;
-    codegen->CreateIfElseBlocks(fn, "parse_success", "parse_fail",
+    codegen->CreateIfElseBlocks(*fn, "parse_success", "parse_fail",
         &parse_success_block, &parse_failed_block);
     LlvmCodeGen::NamedVariable parse_result("parse_result", codegen->GetType(TYPE_INT));
-    Value* parse_result_ptr = codegen->CreateEntryBlockAlloca(fn, parse_result);
+    Value* parse_result_ptr = codegen->CreateEntryBlockAlloca(*fn, parse_result);
 
     // Call Impala's StringTo* function
     Value* result = builder.CreateCall(parse_fn,
@@ -268,5 +275,9 @@ Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
   slot_desc->CodegenSetNullIndicator(codegen, &builder, args[0], codegen->true_value());
   builder.CreateRet(codegen->true_value());
 
-  return codegen->FinalizeFunction(fn);
+  if (codegen->FinalizeFunction(*fn) == NULL) {
+    Status("TextConverter::CodegenWriteSlot:codegen'd "
+       "WriteSlot function failed verification");
+  }
+  return Status::OK();
 }
