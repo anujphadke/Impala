@@ -105,12 +105,12 @@ void TextConverter::UnescapeString(const char* src, char* dest, int* len,
 //   %overflowed = icmp eq i32 %parse_result1, 2
 //   %failed_or = or i1 %failed, %overflowed
 //   br i1 %failed_or, label %parse_fail, label %parse_success
-Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
-    TupleDescriptor* tuple_desc, SlotDescriptor* slot_desc,
+Status TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
+    TupleDescriptor* tuple_desc, SlotDescriptor* slot_desc, Function* fn,
     const char* null_col_val, int len, bool check_null, bool strict_mode) {
+
   if (slot_desc->type().type == TYPE_CHAR) {
-    LOG(INFO) << "Char isn't supported for CodegenWriteSlot";
-    return NULL;
+    return Status("Char isn't supported for CodegenWriteSlot @@@@@@@@@@@");
   }
   SCOPED_TIMER(codegen->codegen_timer());
 
@@ -122,10 +122,16 @@ Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
   } else {
     is_null_string_fn = codegen->GetFunction(IRFunction::GENERIC_IS_NULL_STRING, false);
   }
-  if (is_null_string_fn == NULL) return NULL;
+  if (is_null_string_fn == NULL) {
+    return Status("TextConverter::CodegenWriteSlot: Failed to find IRFunction for "
+       "a null string");
+  }
 
   StructType* tuple_type = tuple_desc->GetLlvmStruct(codegen);
-  if (tuple_type == NULL) return NULL;
+  if (tuple_type == NULL) {
+    return Status("TextConverter::CodegenWriteSlot: Failed to generate "
+        "intermediate tuple type");
+  }
   PointerType* tuple_ptr_type = tuple_type->getPointerTo();
 
   LlvmCodeGen::FnPrototype prototype(
@@ -136,7 +142,7 @@ Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
 
   LlvmBuilder builder(codegen->context());
   Value* args[3];
-  Function* fn = prototype.GeneratePrototype(&builder, &args[0]);
+  fn = prototype.GeneratePrototype(&builder, &args[0]);
 
   BasicBlock* set_null_block, *parse_slot_block, *check_zero_block = NULL;
   codegen->CreateIfElseBlocks(fn, "set_null", "parse_slot",
@@ -222,7 +228,8 @@ Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
         break;
       default:
         DCHECK(false);
-        return NULL;
+        return Status("TextConverter::CodegenWriteSlot: Failed to codegen since "
+           "it could not determine the slot_desc type");
     }
     parse_fn = codegen->GetFunction(parse_fn_enum, false);
     DCHECK(parse_fn != NULL);
@@ -268,5 +275,9 @@ Function* TextConverter::CodegenWriteSlot(LlvmCodeGen* codegen,
   slot_desc->CodegenSetNullIndicator(codegen, &builder, args[0], codegen->true_value());
   builder.CreateRet(codegen->true_value());
 
-  return codegen->FinalizeFunction(fn);
+  if (codegen->FinalizeFunction(fn) == NULL) {
+    Status("TextConverter::CodegenWriteSlot:codegen'd "
+       "WriteSlot function failed verification");
+  }
+  return Status::OK();
 }

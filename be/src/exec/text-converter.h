@@ -81,8 +81,8 @@ class TextConverter {
   /// be used for partitions that contain escapes.
   /// strict_mode: If set, numerical overflow/underflow are considered to be parse
   /// errors.
-  static llvm::Function* CodegenWriteSlot(LlvmCodeGen* codegen,
-      TupleDescriptor* tuple_desc, SlotDescriptor* slot_desc,
+  static Status CodegenWriteSlot(LlvmCodeGen* codegen,
+      TupleDescriptor* tuple_desc, SlotDescriptor* slot_desc, llvm::Function* fn,
       const char* null_col_val, int len, bool check_null, bool strict_mode = false);
 
  private:
