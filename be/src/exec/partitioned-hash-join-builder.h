@@ -279,7 +279,8 @@ class PhjBuilder : public DataSink {
   /// Reads the rows in build_batch and partitions them into hash_partitions_. If
   /// 'build_filters' is true, runtime filters are populated.
   Status ProcessBuildBatch(
-      RowBatch* build_batch, HashTableCtx* ctx, bool build_filters) WARN_UNUSED_RESULT;
+      RowBatch* build_batch, HashTableCtx* ctx, bool build_filters,
+      bool null_aware) WARN_UNUSED_RESULT;
 
   /// Append 'row' to 'stream'. In the common case, appending the row to the stream
   /// immediately succeeds. Otherwise this function falls back to the slower path of
@@ -473,7 +474,7 @@ class PhjBuilder : public DataSink {
   /// and is used when the partition level is 0, otherwise xxx_fn_ uses murmur hash and is
   /// used for subsequent levels.
   typedef Status (*ProcessBuildBatchFn)(
-      PhjBuilder*, RowBatch*, HashTableCtx*, bool build_filters);
+      PhjBuilder*, RowBatch*, HashTableCtx*, bool build_filters, bool is_null_partition);
   /// Jitted ProcessBuildBatch function pointers.  NULL if codegen is disabled.
   ProcessBuildBatchFn process_build_batch_fn_;
   ProcessBuildBatchFn process_build_batch_fn_level0_;
