@@ -37,14 +37,15 @@ inline bool PhjBuilder::AppendRow(
 }
 
 Status PhjBuilder::ProcessBuildBatch(
-    RowBatch* build_batch, HashTableCtx* ctx, bool build_filters) {
+    RowBatch* build_batch, HashTableCtx* ctx, bool build_filters, bool null_aware) {
   Status status;
   HashTableCtx::ExprValuesCache* expr_vals_cache = ctx->expr_values_cache();
   expr_vals_cache->Reset();
   FOREACH_ROW(build_batch, 0, build_batch_iter) {
     TupleRow* build_row = build_batch_iter.Get();
     if (!ctx->EvalAndHashBuild(build_row)) {
-      if (null_aware_partition_ != NULL) {
+      if (null_aware) {
+        DCHECK(true);
         // TODO: remove with codegen/template
         // If we are NULL aware and this build row has NULL in the eq join slot,
         // append it to the null_aware partition. We will need it later.
