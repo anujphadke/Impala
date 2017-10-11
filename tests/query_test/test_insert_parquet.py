@@ -34,6 +34,7 @@ from tests.common.test_dimensions import create_exec_option_dimension
 from tests.common.test_vector import ImpalaTestDimension
 from tests.util.filesystem_utils import get_fs_path
 from tests.util.get_parquet_metadata import get_parquet_metadata, decode_stats_value
+from tests.util.filesystem_utils import FILESYSTEM_PREFIX
 
 PARQUET_CODECS = ['none', 'snappy', 'gzip']
 
@@ -287,6 +288,51 @@ class TestHdfsParquetTableWriter(ImpalaTestSuite):
         file_meta_data = get_parquet_metadata(parquet_file)
         assert file_meta_data.column_orders == expected_col_orders
 
+  def test_read_write_logical_types(self, vector, unique_database, tmpdir):
+    """IMPALA-5052: Read and write signed integer parquet logical types
+    This test creates a src_tbl like a parquet file. The parquet file was generated
+    to have columns with different signed integer logical types. The test verifies
+    that parquet file written by the hdfs parquet table writer using the genererated
+    file has the same colummn type metadata as the generated one."""
+    hdfs_path = get_fs_path('/test-warehouse/{0}.db/signed_integer_logical_types.parquet'
+                            .format(unique_database))
+    check_call(['hdfs', 'dfs', '-copyFromLocal', os.environ['IMPALA_HOME'] +
+                '/testdata/data/signed_integer_logical_types.parquet', hdfs_path])
+
+    # Create table with signed integer logical types
+    src_tbl = "{0}.{1}".format(unique_database, "read_write_logical_type_src")
+    print ("hdfs_path: %s" %hdfs_path)
+    create_tbl_stmt = """create table {0} like parquet "{1} "
+        stored as parquet""".format(src_tbl, hdfs_path)
+    result = self.execute_query(create_tbl_stmt)
+
+    # Insert values in this table
+    insert_stmt = "insert into table {0} values(1, 2, 3, 4, 5)".format(src_tbl);
+    result = self.execute_query(insert_stmt)
+
+    # To test the integer round tripping, a new dst_tbl is created by using the parquet
+    # file written by the src_tbl and running the following tests -
+    #   1. inserting same values into src and dst table and reading it back and comparing
+    #      them.
+    #   2. describe table on the src and dst tables should return the same column types
+    hdfs_path = result.data[0].split("\t")[0]
+    result = self.execute_query("show files in %s" %src_tbl)
+    dst_tbl = "{0}.{1}".format(unique_database, "read_write_logical_type_dst")
+    create_tbl_stmt = 'create table {0} like parquet "{1}"'.format(dst_tbl, hdfs_path)
+    result = self.execute_query(create_tbl_stmt)
+    insert_stmt = "insert into table {0} values(1, 2, 3, 4, 5)".format(dst_tbl);
+    self.execute_query(insert_stmt)
+
+    # Check that the values inserted are same in both src and dst tables
+    result_src = self.execute_query("select * from %s" % src_tbl)
+    result_dst = self.execute_query("select * from %s" % dst_tbl)
+    assert result_src.data == result_dst.data
+
+    # Check that the type of columns in both src and dst tables are same.
+    result_src = self.execute_query("describe %s" % src_tbl)
+    result_dst = self.execute_query("describe %s" % dst_tbl)
+    assert result_src.data == result_dst.data
+
 @SkipIfIsilon.hive
 @SkipIfLocal.hive
 @SkipIfS3.hive
@@ -505,7 +551,6 @@ class TestHdfsParquetTableStatsWriter(ImpalaTestSuite):
         ColumnStats('vc', 'abc banana', 'ghj xyz', 0),
         ColumnStats('st', 'abc xyz', 'lorem ipsum', 0)
     ]
-
     self._ctas_table_and_verify_stats(vector, unique_database, tmpdir.strpath,
                                       qualified_table_name, expected_min_max_values)
 
