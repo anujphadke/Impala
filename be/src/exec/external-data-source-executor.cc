@@ -27,6 +27,7 @@
 #include "runtime/lib-cache.h"
 #include "util/parse-util.h"
 #include "util/metrics.h"
+#include "util/scope-exit-trigger.h"
 
 #include "common/names.h"
 
@@ -136,9 +137,13 @@ ExternalDataSourceExecutor::~ExternalDataSourceExecutor() {
 Status ExternalDataSourceExecutor::Init(const string& jar_path,
     const string& class_name, const string& api_version, const string& init_string) {
   DCHECK(!is_initialized_);
+  LibCacheEntry* entry = nullptr;
   string local_jar_path;
-  RETURN_IF_ERROR(LibCache::instance()->GetLocalLibPath(
-      jar_path, LibCache::TYPE_JAR, &local_jar_path));
+  const auto entry_cleanup = MakeScopeExitTrigger([entry]() {
+    if (entry != nullptr) LibCache::instance()->DecrementUseCount(entry);}
+  );
+  RETURN_IF_ERROR(LibCache::instance()->GetLocalPath(
+      jar_path, LibCache::TYPE_JAR, &entry, &local_jar_path));
 
   JNIEnv* jni_env = getJNIEnv();
 

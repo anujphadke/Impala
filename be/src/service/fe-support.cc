@@ -294,14 +294,17 @@ static void ResolveSymbolLookup(const TSymbolLookupParams params,
   if (params.fn_binary_type != TFunctionBinaryType::BUILTIN) {
     // Refresh the library if necessary since we're creating a new function
     LibCache::instance()->SetNeedsRefresh(params.location);
+    LibCacheEntry* entry = nullptr;
     string dummy_local_path;
-    Status status = LibCache::instance()->GetLocalLibPath(
-        params.location, type, &dummy_local_path);
+    Status status = LibCache::instance()->GetLocalPath(
+        params.location, type, &entry, &dummy_local_path);
+
     if (!status.ok()) {
       result->__set_result_code(TSymbolLookupResultCode::BINARY_NOT_FOUND);
       result->__set_error_msg(status.GetDetail());
       return;
     }
+    LibCache::instance()->DecrementUseCount(entry);
   }
 
   // Check if the FE-specified symbol exists as-is.
@@ -387,11 +390,15 @@ Java_org_apache_impala_service_FeSupport_NativeCacheJar(
       JniUtil::internal_exc_class(), nullptr);
 
   TCacheJarResult result;
+  LibCacheEntry* entry = nullptr;
   string local_path;
-  Status status = LibCache::instance()->GetLocalLibPath(params.hdfs_location,
-      LibCache::TYPE_JAR, &local_path);
+  Status status = LibCache::instance()->GetLocalPath(
+      params.hdfs_location, LibCache::TYPE_JAR, &entry, &local_path);
   status.ToThrift(&result.status);
-  if (status.ok()) result.__set_local_path(local_path);
+  if (status.ok()) {
+    result.__set_local_path(local_path);
+    LibCache::instance()->DecrementUseCount(entry);
+  }
 
   jbyteArray result_bytes = NULL;
   THROW_IF_ERROR_RET(SerializeThriftMsg(env, &result, &result_bytes), env,

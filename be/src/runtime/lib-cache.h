@@ -71,11 +71,18 @@ class LibCache {
   /// Initializes the libcache. Must be called before any other APIs.
   static Status Init();
 
-  /// Gets the local file system path for the library at 'hdfs_lib_file'. If
-  /// this file is not already on the local fs, it copies it and caches the
-  /// result. Returns an error if 'hdfs_lib_file' cannot be copied to the local fs.
-  Status GetLocalLibPath(const std::string& hdfs_lib_file, LibType type,
-                         std::string* local_path);
+  /// Gets the local 'path' used to cache the file stored at the global 'hdfs_lib_file'.
+  /// If the referenced global file has not been copied locally, it copies it and
+  /// caches the result.
+  ///
+  /// If entry is non-null and *entry is null, *entry will be set to the cached entry. If
+  /// entry is non-null and *entry is non-null, *entry will be reused (i.e., the use count
+  /// is not increased). The caller must call DecrementUseCount(*entry) when it is done
+  /// using 'path'.
+  ///
+  /// Returns an error if 'hdfs_lib_file' cannot be copied to the local fs.
+  Status GetLocalPath(const std::string& hdfs_lib_file, LibType type,
+                      LibCacheEntry** entry, string* path);
 
   /// Returns status.ok() if the symbol exists in 'hdfs_lib_file', non-ok otherwise.
   /// If 'quiet' is true, the error status for non-Java unfound symbols will not be logged.

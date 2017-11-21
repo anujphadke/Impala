@@ -77,6 +77,7 @@
 #include "util/hdfs-util.h"
 #include "util/path-builder.h"
 #include "util/runtime-profile-counters.h"
+#include "util/scope-exit-trigger.h"
 #include "util/symbols-util.h"
 #include "util/test-info.h"
 
@@ -327,9 +328,13 @@ Status LlvmCodeGen::LinkModuleFromLocalFs(const string& file) {
 
 Status LlvmCodeGen::LinkModuleFromHdfs(const string& hdfs_location) {
   if (linked_modules_.find(hdfs_location) != linked_modules_.end()) return Status::OK();
+  LibCacheEntry* entry = nullptr;
   string local_path;
-  RETURN_IF_ERROR(LibCache::instance()->GetLocalLibPath(hdfs_location, LibCache::TYPE_IR,
-      &local_path));
+  const auto entry_cleanup = MakeScopeExitTrigger([entry]() {
+    if (entry != nullptr) LibCache::instance()->DecrementUseCount(entry);}
+  );
+  RETURN_IF_ERROR(LibCache::instance()->GetLocalPath(hdfs_location, LibCache::TYPE_IR,
+      &entry, &local_path));
   RETURN_IF_ERROR(LinkModuleFromLocalFs(local_path));
   linked_modules_.insert(hdfs_location);
   return Status::OK();
