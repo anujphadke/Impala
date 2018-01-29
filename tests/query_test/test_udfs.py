@@ -327,8 +327,16 @@ class TestUdfExecution(TestUdfBase):
     # Aim to exercise two failure cases:
     # 1. too many arguments
     # 2. IR UDF
-    if vector.get_value('exec_option')['disable_codegen']:
-      self.run_test_case('QueryTest/udf-errors', vector, use_db=unique_database)
+    try:
+      with open("bad_udf.ll", "w") as f:
+        f.write("Hello World")
+      check_call(["hadoop", "fs", "-put", "-f", f.name, "/test-warehouse/bad_udf.ll"])
+      if vector.get_value('exec_option')['disable_codegen']:
+        self.run_test_case('QueryTest/udf-errors', vector, use_db=unique_database)
+    finally:
+      check_call(["hadoop", "fs", "-rm", "-f", "/test-warehouse/bad_udf.ll"])
+      if os.path.exists(f.name):
+        os.remove(f.name)
 
   # Run serially because this will blow the process limit, potentially causing other
   # queries to fail

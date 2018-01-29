@@ -19,6 +19,7 @@ import os
 import pytest
 import shlex
 from subprocess import check_call
+import time
 
 from tests.common.test_vector import ImpalaTestDimension
 from tests.common.impala_test_suite import ImpalaTestSuite
@@ -46,7 +47,9 @@ class TestParquetStats(ImpalaTestSuite):
     # The test makes assumptions about the number of row groups that are processed and
     # skipped inside a fragment, so we ensure that the tests run in a single fragment.
     vector.get_value('exec_option')['num_nodes'] = 1
+    time.sleep(60)
     self.run_test_case('QueryTest/parquet-stats', vector, use_db=unique_database)
+    time.sleep(60)
 
   def test_deprecated_stats(self, vector, unique_database):
     """Test that reading parquet files with statistics with deprecated 'min'/'max' fields
