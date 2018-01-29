@@ -1312,7 +1312,12 @@ Status LlvmCodeGen::GetSymbols(const string& file, const string& module_id,
     unordered_set<string>* symbols) {
   ObjectPool pool;
   scoped_ptr<LlvmCodeGen> codegen;
-  RETURN_IF_ERROR(CreateFromFile(nullptr, &pool, nullptr, file, module_id, &codegen));
+  Status status = CreateFromFile(nullptr, &pool, nullptr, file, module_id, &codegen);
+  if (!status.ok()) {
+    LOG(INFO) << "Close codegen";
+    codegen->Close();
+    return status;
+  }
   for (const llvm::Function& fn : codegen->module_->functions()) {
     if (fn.isMaterializable()) symbols->insert(fn.getName());
   }
@@ -1709,8 +1714,10 @@ void LlvmCodeGen::DiagnosticHandler::DiagnosticHandlerFn(
     diagnostic_printer << "LLVM diagnostic error: ";
     info.print(diagnostic_printer);
     error_msg.flush();
-    LOG(INFO) << "Query " << codegen->state_->query_id() << " encountered a "
-        << codegen->diagnostic_handler_.error_str_;
+    if (codegen->state_) {
+      LOG(INFO) << "Query " << codegen->state_->query_id() << " encountered a "
+          << codegen->diagnostic_handler_.error_str_;
+    }
   }
 }
 
